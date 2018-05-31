@@ -42,7 +42,7 @@ class LinearSC(UnsupModule):
                              lambda1=self.lam / 2,  # so to remove 1/2 factor for reconstruction loss.
                              mode=2)
             response = response.T.toarray()  # because lasso returns sparse matrix...
-            response_cost = abs(response)
+            response_cost = abs(response)*self.lam
             if self.size_average_l1:
                 response_cost = float(response_cost.mean())
             else:
