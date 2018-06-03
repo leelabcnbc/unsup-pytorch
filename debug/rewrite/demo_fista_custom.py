@@ -1,6 +1,10 @@
 """this file tries to replicate https://github.com/koraykv/unsup/blob/master/demo/demo_fista.lua,
 with its original experiment parameters.
 the original script's data for first 10 iterations were collected using `/debug/reference/demo_fista_debug.lua`
+
+
+run with `OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python demo_fista_custom.py` to get full reproducibility.
+https://discuss.pytorch.org/t/nondeterministic-behaviour-of-grad-running-on-cpu/7402/2
 """
 import os
 import numpy as np
@@ -21,7 +25,7 @@ def demo(data_dir=dir_dictionary['debug_reference'],
     num_data = data_dict['data'].shape[0]
     assert num_data == data_dict['serr'].shape[0] == data_dict['weight'].shape[0] == data_dict['grad_weight'].shape[0]
 
-    model = sc.LinearSC(81, 32, lam)
+    model = sc.LinearSC(81, 32, lam, solver_type='fista_custom')
     # intialize.
     init_weight = Tensor(data_dict['weight'][0])
     assert model.linear_module.weight.size() == init_weight.size()
@@ -33,6 +37,8 @@ def demo(data_dir=dir_dictionary['debug_reference'],
     for i, (data_this, weight_this, grad_this, serr_this) in enumerate(
             zip(data_dict['data'], data_dict['weight'], data_dict['grad_weight'], data_dict['serr'])
     ):
+        # if i >= 5:
+        #     break
         assert data_this.shape == (81,)
         assert weight_this.shape == (81, 32) == grad_this.shape
         assert np.isscalar(serr_this)
@@ -64,94 +70,90 @@ def demo(data_dir=dir_dictionary['debug_reference'],
 if __name__ == '__main__':
     demo()
 
-
-    # TODO: these are deprecated.
-    # they are obtained with commit b17b168cf2e831ce8fda66893019d078d8efa18e
-    # where lua scripts have precisions higher than default.
-    #
     # sample output.
-    #
+    # if `OMP_NUM_THREADS=1 MKL_NUM_THREADS=1`, sometimes more "accurate" results can be obtained.
+    # (well this depends on how blas for lua torch is implemented).
     #
     # 0
     # 2.61611268749e-08
     # 43.1805 43.1805
-    # 0.00290196223956
+    # 2.64659647327e-07
     # 1
-    # 5.35240718639e-06
+    # 3.26278911902e-08
     # 20.2959 20.2959
-    # 0.000514103349745
+    # 1.71575460968e-07
     # 2
-    # 5.35213082833e-06
+    # 3.47194842761e-08
     # 36.0171 36.0171
-    # 0.000500145344171
+    # 0.00117025386274
     # 3
-    # 5.36931814231e-06
-    # 3.54644 3.54644
-    # 0.00250252509634
+    # 1.40639701086e-06
+    # 3.54644 3.54645
+    # 0.00821431432149
     # 4
-    # 5.3699370032e-06
+    # 1.4283722749e-06
     # 5.21084 5.21084
-    # 0.0180147354815
+    # 9.53782483197e-07
     # 5
-    # 5.38090078686e-06
+    # 1.42836149266e-06
     # 3.53002 3.53002
     # 0.0
     # 6
-    # 5.38090078686e-06
+    # 1.42836149266e-06
     # 11.3661 11.3661
-    # 0.00231359645681
+    # 0.00478018666745
     # 7
-    # 5.39583366385e-06
-    # 40.9056 40.9057
-    # 0.00178441112682
+    # 1.58112279994e-06
+    # 40.906 40.9057
+    # 0.0102877893582
     # 8
-    # 5.80707565172e-06
-    # 33.7171 33.7171
-    # 0.00211863190168
+    # 1.24102502393e-05
+    # 33.7172 33.7172
+    # 0.0011931663148
     # 9
-    # 6.23248084483e-06
+    # 1.24360109692e-05
     # 24.2264 24.2264
-    # 0.00058858690448
+    # 0.00237716430219
     demo(data_file_prefix='demo_fista_debug_lam5', lam=0.5)
 
     # sample output
     # 0
     # 2.61611268749e-08
-    # 37.3499 37.3499
-    # 0.00153858082881
+    # 37.35 37.35
+    # 1.79564954089e-07
     # 1
-    # 3.69566768437e-06
-    # 18.2634 18.2634
-    # 0.000864224941706
+    # 3.4675322279e-08
+    # 18.2635 18.2635
+    # 1.8769624477e-07
     # 2
-    # 3.761611163e-06
-    # 32.3234 32.3234
-    # 0.000302432177751
+    # 4.02489925743e-08
+    # 32.3235 32.3235
+    # 0.0010648294056
     # 3
-    # 3.79196733534e-06
-    # 3.25733 3.25734
-    # 0.00297919489445
+    # 2.09694794192e-06
+    # 3.25817 3.25769
+    # 0.0173171483983
     # 4
-    # 3.82449408563e-06
-    # 4.98606 4.98606
-    # 0.00256697328301
+    # 2.99907216578e-06
+    # 4.98615 4.98611
+    # 0.00578583219375
     # 5
-    # 3.82637849657e-06
-    # 3.46743 3.46743
-    # 0.00366329155799
+    # 3.08702354721e-06
+    # 3.46744 3.46746
+    # 0.00848901201271
     # 6
-    # 3.82809910119e-06
-    # 10.3146 10.3146
-    # 0.0027275136879
+    # 3.08635134954e-06
+    # 10.3149 10.3149
+    # 0.0047616865181
     # 7
-    # 3.95580786746e-06
-    # 36.8153 36.8154
-    # 0.0047237185353
+    # 3.72570341912e-06
+    # 36.8153 36.8153
+    # 0.00493065128216
     # 8
-    # 1.03838577946e-05
-    # 30.5898 30.5898
-    # 0.00323347938714
+    # 1.06865952261e-05
+    # 30.59 30.5901
+    # 0.00179251713591
     # 9
-    # 1.14993998806e-05
-    # 20.8955 20.8955
-    # 0.000657894889406
+    # 1.09624497227e-05
+    # 20.8953 20.9011
+    # 0.0285488980698

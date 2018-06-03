@@ -56,7 +56,7 @@ data = getdata(params.datafile, params.inputsize)
 if params.inputsize == params.kernelsize and params.conv == false then
    print('Linear sparse coding')
    mlp = unsup.LinearFistaL1(params.inputsize*params.inputsize, params.nfiltersout, params.lambda,
-    {maxiter=1000, errthres=1e-6, maxline=100})
+    {verbose=true})
 else
    print('Convolutional sparse coding')
    mlp = unsup.SpatialConvFistaL1(params.nfiltersin, params.nfiltersout, params.kernelsize, params.kernelsize, params.inputsize, params.inputsize, params.lambda)
