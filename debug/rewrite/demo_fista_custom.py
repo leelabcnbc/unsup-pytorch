@@ -7,6 +7,7 @@ run with `OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python demo_fista_custom.py` to ge
 https://discuss.pytorch.org/t/nondeterministic-behaviour-of-grad-running-on-cpu/7402/2
 """
 import os
+from sys import argv
 import numpy as np
 from numpy.linalg import norm
 from unsup import dir_dictionary, sc  # somehow I need to import spams earlier than torch.
@@ -15,7 +16,7 @@ from torch.autograd import Variable
 
 
 def demo(data_dir=dir_dictionary['debug_reference'],
-         data_file_prefix='demo_fista_debug', lam=1.0):
+         data_file_prefix='demo_fista_debug', lam=1.0, gpu=False):
     # load all data.
     data_dict = {
         k: np.load(os.path.join(data_dir, f'{data_file_prefix}_{k}.npy')) for k in ('data', 'serr',
@@ -27,8 +28,13 @@ def demo(data_dir=dir_dictionary['debug_reference'],
 
     model = sc.LinearSC(81, 32, lam, solver_type='fista_custom')
     # intialize.
+    if gpu:
+        model.cuda()
+
     init_weight = Tensor(data_dict['weight'][0])
     assert model.linear_module.weight.size() == init_weight.size()
+    if gpu:
+        init_weight = init_weight.cuda()
     model.linear_module.weight.data[...] = init_weight
     # change factor from 32 to 81 or 1 will dramatically increase the difference between ref and actual.
     optimizer = optim.SGD(model.parameters(), lr=0.01 / 32)
@@ -51,8 +57,10 @@ def demo(data_dir=dir_dictionary['debug_reference'],
         print(norm(weight_this_actual.ravel() - weight_this.ravel()) / (norm(weight_this.ravel()) + 1e-6))
 
         optimizer.zero_grad()
-
-        cost_this = model.forward(Variable(Tensor(data_this[np.newaxis])))
+        input_this = Tensor(data_this[np.newaxis])
+        if gpu:
+            input_this = input_this.cuda()
+        cost_this = model.forward(Variable(input_this))
         cost_this.backward()
         cost_this = cost_this.data.cpu().numpy()
         assert cost_this.shape == (1,)
@@ -68,7 +76,10 @@ def demo(data_dir=dir_dictionary['debug_reference'],
 
 
 if __name__ == '__main__':
-    demo()
+    gpu = len(argv) > 1
+    if gpu:
+        print('GPU support!')
+    demo(gpu=gpu)
 
     # sample output.
     # if `OMP_NUM_THREADS=1 MKL_NUM_THREADS=1`, sometimes more "accurate" results can be obtained.
@@ -114,7 +125,52 @@ if __name__ == '__main__':
     # 1.24360109692e-05
     # 24.2264 24.2264
     # 0.00237716430219
-    demo(data_file_prefix='demo_fista_debug_lam5', lam=0.5)
+
+    # GPU version
+    #
+    # GPU support!
+    # 0
+    # 2.61611268749e-08
+    # 43.1805 43.1805
+    # 1.60780196461e-07
+    # 1
+    # 3.26428155256e-08
+    # 20.2959 20.2959
+    # 2.1432005255e-07
+    # 2
+    # 3.47192396336e-08
+    # 36.0171 36.0171
+    # 1.61258931958e-07
+    # 3
+    # 3.80074572723e-08
+    # 3.54645 3.54645
+    # 5.80048322074e-07
+    # 4
+    # 3.84934352058e-08
+    # 5.21084 5.21084
+    # 3.09069096599e-07
+    # 5
+    # 3.85534676656e-08
+    # 3.53002 3.53002
+    # 0.0
+    # 6
+    # 3.85534676656e-08
+    # 11.3661 11.3661
+    # 1.0749870643e-06
+    # 7
+    # 4.0654224229e-08
+    # 40.9057 40.9057
+    # 2.22819292923e-07
+    # 8
+    # 4.47181734167e-08
+    # 33.7172 33.7172
+    # 2.38714051451e-07
+    # 9
+    # 4.80621791835e-08
+    # 24.2264 24.2264
+    # 0.000408876993549
+
+    demo(data_file_prefix='demo_fista_debug_lam5', lam=0.5, gpu=gpu)
 
     # sample output
     # 0
@@ -157,3 +213,46 @@ if __name__ == '__main__':
     # 1.09624497227e-05
     # 20.8953 20.9011
     # 0.0285488980698
+    #
+
+    # GPU version.
+    # 0
+    # 2.61611268749e-08
+    # 37.35 37.35
+    # 2.04642019804e-07
+    # 1
+    # 3.47106788726e-08
+    # 18.2635 18.2635
+    # 2.55263152676e-07
+    # 2
+    # 4.03776223343e-08
+    # 32.3235 32.3235
+    # 1.69859962006e-07
+    # 3
+    # 4.53440785534e-08
+    # 3.25769 3.25769
+    # 2.1986776932e-07
+    # 4
+    # 4.65728424339e-08
+    # 4.98611 4.98611
+    # 2.67140204568e-07
+    # 5
+    # 4.95220334287e-08
+    # 3.46746 3.46746
+    # 1.94738366219e-07
+    # 6
+    # 5.06349208783e-08
+    # 10.3149 10.3149
+    # 2.21694368105e-07
+    # 7
+    # 5.33795376612e-08
+    # 36.8153 36.8153
+    # 2.01568691096e-07
+    # 8
+    # 5.79902454788e-08
+    # 30.5901 30.5901
+    # 1.36878011556e-07
+    # 9
+    # 6.09854473707e-08
+    # 20.9011 20.9011
+    # 1.92646698354e-07
