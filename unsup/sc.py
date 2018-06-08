@@ -7,8 +7,8 @@ from torch.autograd import Variable
 import torch
 from torch import Tensor
 import numpy as np
-from torch.nn import Linear, MSELoss
-from torch.nn.functional import linear, softshrink
+from torch.nn import Linear, MSELoss, ConvTranspose2d
+from torch.nn.functional import linear, softshrink, conv2d
 from .core import UnsupModule
 from .fista import fista_ls
 
@@ -46,7 +46,7 @@ class LinearSC(UnsupModule):
                 return cost_recon, grad_this
 
         def g_fista(x: Tensor):
-            cost = torch.abs(x)*self.lam
+            cost = torch.abs(x) * self.lam
             if self.size_average_l1:
                 cost = cost.mean()
             else:
@@ -112,5 +112,104 @@ class LinearSC(UnsupModule):
                 self.L = L_new
             recon = self.linear_module(response)
             return self.cost(recon, x) + self.g_fista(response.data)
+        else:
+            raise NotImplementedError
+
+
+def generate_weight_template(h, w, k):
+    h_1 = np.arange(1, h + 1)
+    w_1 = np.arange(1, w + 1)
+
+    h_1 = np.minimum(h_1, k)
+    h_1 = np.minimum(h_1, h_1[::-1])
+
+    w_1 = np.minimum(w_1, k)
+    w_1 = np.minimum(w_1, w_1[::-1])
+
+    a = h_1[:, np.newaxis] * w_1[np.newaxis, :]
+    return Tensor(a / a.max())
+
+
+class ConvSC(UnsupModule):
+    # here this input_size is the size (height/width) of the image.
+    # I assume height = width
+    def __init__(self, num_basis, kernel_size, lam,
+                 solver_type='fista_custom', solver_params=None,
+                 size_average_recon=False,
+                 size_average_l1=False, im_size=None, legacy_bias=False):
+        super().__init__()
+
+        # TODO: consistently change the semantic of size_average
+        # or I always use size_average_* = False and handle this later on.
+        self.lam = lam
+        self.linear_module = ConvTranspose2d(num_basis, 1, kernel_size, bias=legacy_bias)
+        # the official implement has bias.
+        if legacy_bias:
+            self.linear_module.bias.data.zero_()
+        # TODO handle weighted version.
+        self.cost = MSELoss(size_average=size_average_recon)
+        self.size_average_l1 = size_average_l1
+        self.solver_type = solver_type
+        self.solver_params = deepcopy(solver_params)
+        # save a template for later use.
+        assert im_size is not None
+        self.register_buffer('_template_weight', Variable(generate_weight_template(im_size,
+                                                                                   im_size,
+                                                                                   kernel_size)))
+
+        # self.register_buffer('_template_weight', Variable(Tensor(np.ones((25, 25)))))
+
+        # define the function for fista_custom.
+        def f_fista(target: Tensor, code: Tensor, calc_grad):
+            recon = self.linear_module(Variable(code, volatile=True))
+            cost_recon = 0.5 * self.cost(recon, self._template_weight * Variable(target, volatile=True)).data[0]
+            if not calc_grad:
+                return cost_recon
+            else:
+                # compute grad.
+                grad_this = conv2d(recon - self._template_weight * Variable(target, volatile=True),
+                                   self.linear_module.weight, None).data
+                return cost_recon, grad_this
+
+        def g_fista(x: Tensor):
+            cost = torch.abs(x) * self.lam
+            if self.size_average_l1:
+                cost = cost.mean()
+            else:
+                cost = cost.sum()
+            return cost
+
+        self.f_fista = f_fista
+        self.g_fista = g_fista
+        self.pl = lambda x, L: softshrink(Variable(x, volatile=True), lambd=self.lam / L).data
+
+        if self.solver_type == 'fista_custom':
+            self.L = 0.1  # init L
+
+    def forward(self, x: Variable):
+        # x is B x input_size matrix to reconstruct
+        # init_guess is B x output_size matrix code guess
+        n, c, h, w = x.size()
+        assert c == 1
+
+        if self.solver_type == 'fista_custom':
+            # all assuming stride=1
+            xinit = torch.zeros(n, self.linear_module.in_channels,
+                                h - self.linear_module.kernel_size[0] + 1,
+                                w - self.linear_module.kernel_size[0] + 1)
+            if x.is_cuda:
+                xinit = xinit.cuda()
+            response, L_new = fista_ls(partial(self.f_fista, x.data), self.g_fista, self.pl, xinit,
+                                       verbose=False, L=self.L)
+            response = Variable(response, requires_grad=False)
+            # i think this is kind of speed up trick.
+            # in the original lua code,
+            # there's another cap on L (0.1), compared to LinearSC.
+            if L_new == self.L:
+                self.L = max(0.1, L_new / 2)
+            else:
+                self.L = L_new
+            recon = self.linear_module(response)
+            return 0.5 * self.cost(recon, self._template_weight * x) + self.g_fista(response.data)
         else:
             raise NotImplementedError
