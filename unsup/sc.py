@@ -111,7 +111,7 @@ class LinearSC(UnsupModule):
             else:
                 self.L = L_new
             recon = self.linear_module(response)
-            return self.cost(recon, x) + self.g_fista(response.data)
+            return self.cost(recon, x) + self.g_fista(response.data), response
         else:
             raise NotImplementedError
 
@@ -210,6 +210,6 @@ class ConvSC(UnsupModule):
             else:
                 self.L = L_new
             recon = self.linear_module(response)
-            return 0.5 * self.cost(recon, self._template_weight * x) + self.g_fista(response.data)
+            return 0.5 * self.cost(recon, self._template_weight * x) + self.g_fista(response.data), response
         else:
             raise NotImplementedError

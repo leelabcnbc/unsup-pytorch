@@ -64,7 +64,7 @@ def demo(data_dir=dir_dictionary['debug_reference'],
         input_this = Tensor(data_this[np.newaxis])
         if gpu:
             input_this = input_this.cuda()
-        cost_this = model.forward(Variable(input_this))
+        cost_this, _ = model.forward(Variable(input_this))
         cost_this.backward()
         cost_this = cost_this.data.cpu().numpy()
         assert cost_this.shape == (1,)
