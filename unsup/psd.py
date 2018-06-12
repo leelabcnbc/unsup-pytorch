@@ -1,14 +1,15 @@
 """implements *psd.lua in the original code"""
 
-from torch.nn import MSELoss, Parameter, Sequential, Tanh, Linear, Module
+from torch.nn import MSELoss, Parameter, Sequential, Tanh, Linear, Module, Conv2d
 from torch import ones
 from .core import UnsupModule
-from .sc import LinearSC
+from .sc import LinearSC, ConvSC
 
 
 class PSD(UnsupModule):
-    def __init__(self, encoder, decoder,
-                 beta,  # I personally feel beta is irrelevant for learning,
+    def __init__(self, encoder: UnsupModule,
+                 decoder: UnsupModule,
+                 beta: float,  # I personally feel beta is irrelevant for learning the SC dict. Indeed.
                  ):
         super().__init__()
         self.beta = beta
@@ -31,6 +32,9 @@ class PSD(UnsupModule):
         # print('pred_cost', pred_cost)
         return sc_cost + self.beta * pred_cost
 
+    def normalize(self):
+        self.decoder.normalize()
+
 
 # scaling layer
 # https://discuss.pytorch.org/t/is-scale-layer-available-in-pytorch/7954/8
@@ -38,10 +42,10 @@ class PSD(UnsupModule):
 class ScaleLayer(Module):
     def __init__(self, shape, init_val=1.0):
         super().__init__()
-        self.scale = Parameter(ones(*shape) * init_val)
+        self.weight = Parameter(ones(*shape) * init_val)
 
     def forward(self, x):
-        return x * self.scale
+        return x * self.weight
 
 
 class LinearPSD(PSD):
@@ -52,4 +56,15 @@ class LinearPSD(PSD):
                                     # ScaleLayer((num_basis,))
                                     ),
                          LinearSC(input_size, num_basis, lam, solver_type='fista_custom'),
+                         beta)
+
+
+class ConvPSD(PSD):
+    def __init__(self, num_basis, kernel_size, lam, beta, im_size, legacy_bias=False):
+        # currently, pure linear; handler other cases later.
+        super().__init__(Sequential(Conv2d(1, num_basis, kernel_size),
+                                    Tanh(),
+                                    ScaleLayer((num_basis,1,1))
+                                    ),
+                         ConvSC(num_basis, kernel_size, lam, im_size=im_size, legacy_bias=legacy_bias),
                          beta)

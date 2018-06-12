@@ -213,3 +213,16 @@ class ConvSC(UnsupModule):
             return 0.5 * self.cost(recon, self._template_weight * x) + self.g_fista(response.data), response
         else:
             raise NotImplementedError
+
+    def normalize(self):
+        # weight is (num_basis, 1, kernel_size, kernel_size).
+        # according to
+        # https://github.com/koraykv/unsup/blob/54c7a7e0843049436ae3dcd20d9d10716c2ba5cb/FistaL1.lua#L188-L192
+        # in the original code, weight matrix is 3d because num_basis x 1 is mixed together.
+
+        num_basis, _, k_1, k_2 = self.linear_module.weight.size()
+        assert _ == 1
+        # then view its `data` another way
+        weight_reshaped = self.linear_module.weight.data.view(num_basis, k_1 * k_2)
+        # since this is a view, the original one will be modified.
+        weight_reshaped.div_(torch.norm(weight_reshaped, 2, 1, keepdim=True) + 1e-12)
