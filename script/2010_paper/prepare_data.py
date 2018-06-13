@@ -33,6 +33,9 @@ def sample_from_raw_data(std_threshold=0.2, seed=0, ddof=1,
     # for loop
     collected = 0
     all_imgs = []
+    all_img_idx = []
+    all_r_idx = []
+    all_c_idx = []
     while collected < num_im:
         if collected % 10000 == 0:
             print(collected)
@@ -47,15 +50,25 @@ def sample_from_raw_data(std_threshold=0.2, seed=0, ddof=1,
             collected += 1
             # save as float to save space
             all_imgs.append(im_candidate.astype(np.float32))
-    return np.asarray(all_imgs)
+            all_img_idx.append(im_idx)
+            all_r_idx.append(r_idx)
+            all_c_idx.append(c_idx)
+    return {
+        'raw_data': raw_data,
+        'data': np.asarray(all_imgs),
+        'idx_img': np.asarray(all_img_idx),
+        'idx_r': np.asarray(all_r_idx),
+        'idx_c': np.asarray(all_c_idx),
+    }
 
 
 if __name__ == '__main__':
-    a = sample_from_raw_data()
-    print(a.shape)
+    data_dict = sample_from_raw_data()
     # save as npy
     with h5py.File(os.path.join(os.path.split(__file__)[0], 'data.hdf5')) as f:
         if 'data' not in f:
             # 2.4G vs 2.2G. not worth it.
             # f.create_dataset('data', data=a, compression='gzip')
-            f.create_dataset('data', data=a)
+            for k, v in data_dict.items():
+                print(k, v.shape)
+                f.create_dataset(k, data=v)
