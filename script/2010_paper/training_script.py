@@ -102,6 +102,6 @@ if __name__ == '__main__':
     lam_str, lr_str, batch_size_str = argv[1:]
     save_dir = os.path.join(os.path.split(__file__)[0], 'results',
                             f'lam_{lam_str}_lr_{lr_str}_bs_{batch_size_str}')
-
+    os.makedirs(save_dir, exist_ok=True)
     demo(lam=float(lam_str), lr=float(lr_str),
          batch_size=int(batch_size_str), save_dir=save_dir)
