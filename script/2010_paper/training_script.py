@@ -13,13 +13,25 @@ from torch import Tensor, optim
 from torch.autograd import Variable
 import torch
 from torch.utils.data import TensorDataset, DataLoader
+from torchvision.utils import make_grid
+from skimage.io import imsave
 import h5py
 from unsup import sc  # somehow I need to import spams earlier than torch.
 
 
-# use argparse to handle
+def save_weight(model: sc.ConvSC, save_dir: str, name: str):
+    weight = model.linear_module.weight.data.cpu().numpy()
+    a = make_grid(Tensor(weight), nrow=8, normalize=True, scale_each=True)
+    # save a
+    a = np.transpose(a.numpy(), (1, 2, 0))
+    imsave(os.path.join(save_dir, name), a)
 
-def demo(lam, gpu=True, seed=0, batch_size=16):
+
+def demo(*, lam, lr, batch_size, save_dir, gpu=True, seed=0,
+         num_epoch_total=1):
+    print('lam', lam, 'lr', lr, 'bs', batch_size)
+    print('save_dir', save_dir)
+    assert os.path.exists(save_dir), "the dir must exist before!"
     if seed is not None:
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -46,10 +58,9 @@ def demo(lam, gpu=True, seed=0, batch_size=16):
         model.cuda()
 
     # no momentum, as I do normalization.
-    optimizer = optim.SGD(model.parameters(), lr=0.005)
+    optimizer = optim.SGD(model.parameters(), lr=lr)
 
-    epoch_num = 0
-    while True:
+    for epoch_num in range(num_epoch_total):
         loss_sum = 0.0
         for i_minibatch, (input_this, _) in enumerate(data_loader):
             if gpu:
@@ -78,7 +89,9 @@ def demo(lam, gpu=True, seed=0, batch_size=16):
                 print(f'epoch {epoch_num}, iter {i_minibatch+1}/{num_iter_per_epoch}', loss_sum)
                 loss_sum = 0.0
 
-        epoch_num += 1
+                # time to save weights.
+                save_weight(model, save_dir,
+                            '{:02d}_{:08d}.png'.format(epoch_num, i_minibatch + 1))
 
         # save images.
         # follow the old practice.
@@ -86,4 +99,9 @@ def demo(lam, gpu=True, seed=0, batch_size=16):
 
 
 if __name__ == '__main__':
-    demo(1.0, batch_size=16)
+    lam_str, lr_str, batch_size_str = argv[1:]
+    save_dir = os.path.join(os.path.split(__file__)[0], 'results',
+                            f'lam_{lam_str}_lr_{lr_str}_bs_{batch_size_str}')
+
+    demo(lam=float(lam_str), lr=float(lr_str),
+         batch_size=int(batch_size_str), save_dir=save_dir)

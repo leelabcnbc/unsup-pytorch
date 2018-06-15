@@ -1,3 +1,5 @@
 /data.hdf5
 /data.hdf5.gzipped
 /data.hdf5.old
+/results/**
+!/results/.gitignore
