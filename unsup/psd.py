@@ -60,11 +60,14 @@ class LinearPSD(PSD):
 
 
 class ConvPSD(PSD):
-    def __init__(self, num_basis, kernel_size, lam, beta, im_size, legacy_bias=False):
+    def __init__(self, num_basis, kernel_size, lam, beta, im_size, legacy_bias=False,
+                 encoder=None):
         # currently, pure linear; handler other cases later.
-        super().__init__(Sequential(Conv2d(1, num_basis, kernel_size),
-                                    Tanh(),
-                                    ScaleLayer((num_basis,1,1))
-                                    ),
+        if encoder is None:
+            encoder = Sequential(Conv2d(1, num_basis, kernel_size),
+                                 Tanh(),
+                                 ScaleLayer((num_basis, 1, 1))
+                                 )
+        super().__init__(encoder,
                          ConvSC(num_basis, kernel_size, lam, im_size=im_size, legacy_bias=legacy_bias),
                          beta)
