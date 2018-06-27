@@ -18,7 +18,7 @@ class PSD(UnsupModule):
         # I will only support size_average = False for now.
         self.predcost = MSELoss(size_average=False)
 
-    def forward(self, x):
+    def forward(self, x, decomposed=False):
         # go through encoder
         code_forward = self.encoder(x)
         # do sparse coding.
@@ -30,7 +30,11 @@ class PSD(UnsupModule):
         pred_cost = self.predcost(code_forward, sc_code)
         # print('sc cost', sc_cost)
         # print('pred_cost', pred_cost)
-        return sc_cost + self.beta * pred_cost
+        if not decomposed:
+            return sc_cost + self.beta * pred_cost
+        else:
+            # easy for computing prediction part. for testing.
+            return sc_cost, self.beta * pred_cost
 
     def normalize(self):
         self.decoder.normalize()
