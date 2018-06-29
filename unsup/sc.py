@@ -153,21 +153,22 @@ class ConvSC(UnsupModule):
         self.solver_params = deepcopy(solver_params)
         # save a template for later use.
         assert im_size is not None
-        self.register_buffer('_template_weight', Variable(generate_weight_template(im_size,
-                                                                                   im_size,
-                                                                                   kernel_size)))
+        self.register_buffer('_template_weight', generate_weight_template(im_size,
+                                                                          im_size,
+                                                                          kernel_size))
 
         # self.register_buffer('_template_weight', Variable(Tensor(np.ones((25, 25)))))
 
         # define the function for fista_custom.
         def f_fista(target: Tensor, code: Tensor, calc_grad):
             recon = self.linear_module(Variable(code, volatile=True))
-            cost_recon = 0.5 * self.cost(recon, self._template_weight * Variable(target, volatile=True)).data[0]
+            cost_recon = 0.5 * self.cost(recon, Variable(self._template_weight) * Variable(target, volatile=True)).data[
+                0]
             if not calc_grad:
                 return cost_recon
             else:
                 # compute grad.
-                grad_this = conv2d(recon - self._template_weight * Variable(target, volatile=True),
+                grad_this = conv2d(recon - Variable(self._template_weight) * Variable(target, volatile=True),
                                    self.linear_module.weight, None).data
                 return cost_recon, grad_this
 
@@ -210,7 +211,7 @@ class ConvSC(UnsupModule):
             else:
                 self.L = L_new
             recon = self.linear_module(response)
-            return 0.5 * self.cost(recon, self._template_weight * x) + self.g_fista(response.data), response
+            return 0.5 * self.cost(recon, Variable(self._template_weight) * x) + self.g_fista(response.data), response
         else:
             raise NotImplementedError
 
