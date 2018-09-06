@@ -2,6 +2,7 @@
 with its original experiment parameters.
 the original script's data for first 10 iterations were collected using `/debug/reference/demo_fista_debug.lua`
 """
+# deprecated. spams not needed any more.
 import os
 import numpy as np
 from numpy.linalg import norm

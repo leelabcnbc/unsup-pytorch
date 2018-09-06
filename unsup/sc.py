@@ -64,6 +64,7 @@ class LinearSC(UnsupModule):
         # x is B x input_size matrix to reconstruct
         # init_guess is B x output_size matrix code guess
         if self.solver_type == 'spams':
+            raise RuntimeError('spams deprecated')
             from spams import lasso  # intially I put this line later; and it failed.
             x_cpu = x.data.cpu().numpy()
             assert x_cpu.ndim == 2 and x_cpu.shape[1] == self.linear_module.out_features

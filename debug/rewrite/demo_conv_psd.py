@@ -9,7 +9,6 @@ https://discuss.pytorch.org/t/nondeterministic-behaviour-of-grad-running-on-cpu/
 import os
 from sys import argv
 import numpy as np
-import spams
 from numpy.linalg import norm
 from unsup import dir_dictionary, psd  # somehow I need to import spams earlier than torch.
 from torch import Tensor, optim
