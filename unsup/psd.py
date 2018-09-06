@@ -16,7 +16,7 @@ class PSD(UnsupModule):
         self.encoder = encoder  # 1 NN layer.
         self.decoder = decoder  # FISTA L1, SC
         # I will only support size_average = False for now.
-        self.predcost = MSELoss(size_average=False)
+        self.predcost = MSELoss(reduction='sum')
 
     def forward(self, x, decomposed=False, return_code=False):
         # go through encoder
@@ -26,8 +26,12 @@ class PSD(UnsupModule):
         # in lua Torch, this is actually useless,
         # as optim.fistals is not implemented correctly
         # to handle init value.
-        sc_cost, sc_code = self.decoder(x)
-        pred_cost = self.predcost(code_forward, sc_code)
+        if self.beta != 0:
+            sc_cost, sc_code = self.decoder(x)
+            pred_cost = self.predcost(code_forward, sc_code)
+        else:
+            sc_cost = 0.0
+            pred_cost = 0.0
         # print('sc cost', sc_cost)
         # print('pred_cost', pred_cost)
         if not return_code:

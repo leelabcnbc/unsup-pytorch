@@ -48,9 +48,8 @@ def demo(data_dir=dir_dictionary['debug_reference'],
 
         cost_this = model.forward(Variable(Tensor(data_this[np.newaxis])))
         cost_this.backward()
-        cost_this = cost_this.data.cpu().numpy()
-        assert cost_this.shape == (1,)
-        cost_this = cost_this[0]
+        cost_this = cost_this.item()
+        assert np.isscalar(cost_this)
         print(cost_this, serr_this)
 
         # check grad

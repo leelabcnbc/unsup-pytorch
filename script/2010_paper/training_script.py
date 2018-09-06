@@ -43,6 +43,8 @@ def demo(*, lam, lr, batch_size, save_dir, gpu=True, seed=0,
 
     # for 0.3.1, we need dummy label tensor
     # TODO: fix this in 0.4.0
+    # TODO this way of generating tensor is probably deprecated,
+    # using tensor (not Tensor) instead.
     data_tensor = TensorDataset(Tensor(data_raw), Tensor(np.zeros(data_raw.shape[0],
                                                                   dtype=np.int64)))
     data_loader = DataLoader(data_tensor, batch_size=batch_size, shuffle=True, drop_last=False)

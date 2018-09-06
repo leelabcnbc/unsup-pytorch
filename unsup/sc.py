@@ -2,9 +2,8 @@
 
 from copy import deepcopy
 from functools import partial
-from torch.autograd import Variable
 import torch
-from torch import Tensor
+from torch import Tensor, tensor
 import numpy as np
 from torch.nn import Linear, MSELoss, ConvTranspose2d
 from torch.nn.functional import linear, softshrink, conv2d
@@ -20,27 +19,29 @@ class LinearSC(UnsupModule):
                  solver_type='spams', solver_params=None,
                  size_average_recon=False,
                  size_average_l1=False):
+        assert not size_average_recon
+        assert not size_average_l1
         super().__init__()
 
         # TODO: consistently change the semantic of size_average
         # or I always use size_average_* = False and handle this later on.
         self.lam = lam
         self.linear_module = Linear(num_basis, input_size, bias=False)
-        self.cost = MSELoss(size_average=size_average_recon)
+        self.cost = MSELoss(reduction='sum')
         self.size_average_l1 = size_average_l1
         self.solver_type = solver_type
         self.solver_params = deepcopy(solver_params)
 
         # define the function for fista_custom.
         def f_fista(target: Tensor, code: Tensor, calc_grad):
-            recon = self.linear_module(Variable(code, volatile=True))
-            cost_recon = self.cost(recon, Variable(target, volatile=True)).data[0]
+            recon = self.linear_module(code)
+            cost_recon = self.cost(recon, target).item()
             if not calc_grad:
                 return cost_recon
             else:
                 # compute grad.
-                grad_this = linear(recon - Variable(target, volatile=True),
-                                   self.linear_module.weight.t()).data
+                grad_this = linear(recon - target,
+                                   self.linear_module.weight.t())
                 grad_this *= 2
                 return cost_recon, grad_this
 
@@ -54,12 +55,12 @@ class LinearSC(UnsupModule):
 
         self.f_fista = f_fista
         self.g_fista = g_fista
-        self.pl = lambda x, L: softshrink(Variable(x, volatile=True), lambd=self.lam / L).data
+        self.pl = lambda x, L: softshrink(x, lambd=self.lam / L).data
 
         if self.solver_type == 'fista_custom':
             self.L = 0.1  # init L
 
-    def forward(self, x: Variable):
+    def forward(self, x: Tensor):
         # x is B x input_size matrix to reconstruct
         # init_guess is B x output_size matrix code guess
         if self.solver_type == 'spams':
@@ -86,10 +87,9 @@ class LinearSC(UnsupModule):
             else:
                 response_cost = float(response_cost.sum())
             # then pass response into self.linear_module
-            response = Tensor(response)
+            response = tensor(response, dtype=torch.float32)
             if x.is_cuda:
                 response = response.cuda()
-            response = Variable(response)
 
             recon = self.linear_module(response)
 
@@ -100,9 +100,9 @@ class LinearSC(UnsupModule):
             xinit = torch.zeros(x.size()[0], self.linear_module.in_features)
             if x.is_cuda:
                 xinit = xinit.cuda()
-            response, L_new = fista_ls(partial(self.f_fista, x.data), self.g_fista, self.pl, xinit,
-                                       verbose=False, L=self.L)
-            response = Variable(response, requires_grad=False)
+            with torch.no_grad():
+                response, L_new = fista_ls(partial(self.f_fista, x.data), self.g_fista, self.pl, xinit,
+                                           verbose=False, L=self.L)
             # i think this is kind of speed up trick.
             # TODO: in FistaL1.lua (not LinearFistaL1.lua),
             # there's another cap on L.
@@ -111,7 +111,7 @@ class LinearSC(UnsupModule):
             else:
                 self.L = L_new
             recon = self.linear_module(response)
-            return self.cost(recon, x) + self.g_fista(response.data), response
+            return self.cost(recon, x) + self.g_fista(response), response
         else:
             raise NotImplementedError
 
@@ -137,6 +137,8 @@ class ConvSC(UnsupModule):
                  solver_type='fista_custom', solver_params=None,
                  size_average_recon=False,
                  size_average_l1=False, im_size=None, legacy_bias=False):
+        assert not size_average_recon
+        assert not size_average_l1
         super().__init__()
 
         # TODO: consistently change the semantic of size_average
@@ -147,7 +149,7 @@ class ConvSC(UnsupModule):
         if legacy_bias:
             self.linear_module.bias.data.zero_()
         # TODO handle weighted version.
-        self.cost = MSELoss(size_average=size_average_recon)
+        self.cost = MSELoss(reduction='sum')
         self.size_average_l1 = size_average_l1
         self.solver_type = solver_type
         self.solver_params = deepcopy(solver_params)
@@ -161,16 +163,16 @@ class ConvSC(UnsupModule):
 
         # define the function for fista_custom.
         def f_fista(target: Tensor, code: Tensor, calc_grad):
-            recon = self.linear_module(Variable(code, volatile=True))
-            cost_recon = 0.5 * self.cost(recon, Variable(self._template_weight) * Variable(target, volatile=True)).data[
-                0]
-            if not calc_grad:
-                return cost_recon
-            else:
-                # compute grad.
-                grad_this = conv2d(recon - Variable(self._template_weight) * Variable(target, volatile=True),
-                                   self.linear_module.weight, None).data
-                return cost_recon, grad_this
+            with torch.no_grad():
+                recon = self.linear_module(code)
+                cost_recon = 0.5 * self.cost(recon, self._template_weight * target).item()
+                if not calc_grad:
+                    return cost_recon
+                else:
+                    # compute grad.
+                    grad_this = conv2d(recon - self._template_weight * target,
+                                       self.linear_module.weight, None)
+                    return cost_recon, grad_this
 
         def g_fista(x: Tensor):
             cost = torch.abs(x) * self.lam
@@ -182,12 +184,12 @@ class ConvSC(UnsupModule):
 
         self.f_fista = f_fista
         self.g_fista = g_fista
-        self.pl = lambda x, L: softshrink(Variable(x, volatile=True), lambd=self.lam / L).data
+        self.pl = lambda x, L: softshrink(x, lambd=self.lam / L).data
 
         if self.solver_type == 'fista_custom':
             self.L = 0.1  # init L
 
-    def forward(self, x: Variable):
+    def forward(self, x: Tensor):
         # x is B x input_size matrix to reconstruct
         # init_guess is B x output_size matrix code guess
         n, c, h, w = x.size()
@@ -200,9 +202,9 @@ class ConvSC(UnsupModule):
                                 w - self.linear_module.kernel_size[0] + 1)
             if x.is_cuda:
                 xinit = xinit.cuda()
-            response, L_new = fista_ls(partial(self.f_fista, x.data), self.g_fista, self.pl, xinit,
-                                       verbose=False, L=self.L)
-            response = Variable(response, requires_grad=False)
+            with torch.no_grad():
+                response, L_new = fista_ls(partial(self.f_fista, x.data), self.g_fista, self.pl, xinit,
+                                           verbose=False, L=self.L)
             # i think this is kind of speed up trick.
             # in the original lua code,
             # there's another cap on L (0.1), compared to LinearSC.
@@ -211,7 +213,7 @@ class ConvSC(UnsupModule):
             else:
                 self.L = L_new
             recon = self.linear_module(response)
-            return 0.5 * self.cost(recon, Variable(self._template_weight) * x) + self.g_fista(response.data), response
+            return 0.5 * self.cost(recon, self._template_weight * x) + self.g_fista(response), response
         else:
             raise NotImplementedError
 

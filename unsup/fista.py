@@ -3,15 +3,17 @@ https://github.com/torch/optim/blob/63994c78b2eef4266e62e88e0ae444ee0c37074d/fis
 """
 
 from math import sqrt
-from torch import FloatTensor
+from torch import Tensor
 import torch
 
 
-def fista_ls(f, g, pl, x0: FloatTensor, *, verbose=False, L=0.1):
+def fista_ls(f, g, pl, x0: Tensor, *, verbose=False, L=0.1):
     # define params
 
     # x init should be a Tensor or Tensor.cuda.
     # f, g, pl takes Tensor and returns Python float or Tensor (NO Variable).
+    # make sure x0 does not need grad
+    assert not x0.requires_grad
 
     maxiter = 50
     maxline = 20
@@ -19,10 +21,10 @@ def fista_ls(f, g, pl, x0: FloatTensor, *, verbose=False, L=0.1):
     L_step = 1.5
     niter = 0
 
-    xkm: FloatTensor = x0
+    xkm: Tensor = x0
 
     # xkm is x_{k-1} in the original paper.
-    yk: FloatTensor = xkm.clone()
+    yk: Tensor = xkm.clone()
     tk = 1.0  # momentum
 
     fval = float('inf')

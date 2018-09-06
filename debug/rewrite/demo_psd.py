@@ -113,9 +113,8 @@ def demo(data_dir=dir_dictionary['debug_reference'],
             input_this = input_this.cuda()
         cost_this = model.forward(Variable(input_this))
         cost_this.backward()
-        cost_this = cost_this.data.cpu().numpy()
-        assert cost_this.shape == (1,)
-        cost_this = cost_this[0]
+        cost_this = cost_this.item()
+        assert np.isscalar(cost_this)
         print(cost_this, serr_this)
 
         # check grad
@@ -136,7 +135,8 @@ if __name__ == '__main__':
     # demo(data_file_prefix='demo_psd_debug_lam5', lam=0.5, gpu=gpu)
     demo(data_file_prefix='demo_psd_debug_beta5', beta=5, gpu=gpu)
     print('beta=5, with beta=1 data')
-    # I believe weight of encoder won't change.
+    # I believe weight of decoder (sparse coding, not fast approximation)
+    # won't change.
     demo(beta=5, gpu=gpu)
 
     # sample output

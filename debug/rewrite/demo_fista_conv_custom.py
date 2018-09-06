@@ -66,9 +66,8 @@ def demo(data_dir=dir_dictionary['debug_reference'],
             input_this = input_this.cuda()
         cost_this, _ = model.forward(Variable(input_this))
         cost_this.backward()
-        cost_this = cost_this.data.cpu().numpy()
-        assert cost_this.shape == (1,)
-        cost_this = cost_this[0]
+        cost_this = cost_this.item()
+        assert np.isscalar(cost_this)
         print(cost_this, serr_this)
 
         # check grad
