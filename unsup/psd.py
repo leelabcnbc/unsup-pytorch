@@ -9,7 +9,9 @@ from .sc import LinearSC, ConvSC
 class PSD(UnsupModule):
     def __init__(self, encoder: UnsupModule,
                  decoder: UnsupModule,
-                 beta: float,  # I personally feel beta is irrelevant for learning the SC dict. Indeed.
+                 # I personally feel beta is irrelevant for learning the
+                 # SC dict. Indeed.
+                 beta: float,
                  ):
         super().__init__()
         self.beta = beta
@@ -27,6 +29,9 @@ class PSD(UnsupModule):
         # as optim.fistals is not implemented correctly
         # to handle init value.
         if self.beta != 0:
+            # when beta is zero, that means feedforward won't be
+            # affected by sparse part at all;
+            # as an optimization, no need to compute lasso any more.
             sc_cost, sc_code = self.decoder(x)
             pred_cost = self.predcost(code_forward, sc_code)
         else:
@@ -34,6 +39,8 @@ class PSD(UnsupModule):
             pred_cost = 0.0
         # print('sc cost', sc_cost)
         # print('pred_cost', pred_cost)
+        # by doing decomposing, we can separately optimize sc and
+        # forward weights.
         if not return_code:
             if not decomposed:
                 return sc_cost + self.beta * pred_cost
